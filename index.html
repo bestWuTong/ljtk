@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="description" content="逻辑填空词语积累 · 近义成语辨析 / 学习与练习">
+<title>逻辑填空词语积累</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+<script>
+  /* 主题：显式选择优先，否则跟随系统。首帧前打上 data-theme，避免先闪一下亮色 */
+  (function () {
+    var BG = { light: '#f5f5f7', eye: '#dfe9da', dark: '#242428' };
+    var theme;
+    try {
+      var saved = localStorage.getItem('ljtk.theme.v1');
+      if (saved && BG[saved]) theme = saved;
+    } catch (e) {}
+    if (!theme) {
+      theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', theme);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', BG[theme] || BG.light);
+  })();
+
+  /* 兜底：万一脚本加载失败，遮罩也不会永远挡着 */
+  setTimeout(function () {
+    var b = document.getElementById('boot');
+    if (b) { b.classList.add('is-done'); setTimeout(function () { b.hidden = true; }, 320); }
+  }, 8000);
+</script>
+</head>
+<body>
+
+<!-- 启动遮罩：纯 CSS 绘制，等首页渲染完再淡出 -->
+<div class="boot" id="boot" aria-hidden="true">
+  <div class="boot-spinner"></div>
+  <p class="boot-name">逻辑填空词语积累</p>
+</div>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1 class="brand-title">逻辑填空</h1>
+      <p class="brand-sub" id="brandSub">近义成语辨析 · 每日积累</p>
+    </div>
+    <div class="tools">
+      <div class="bank-switch">
+        <button class="bank-btn" id="bankBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <span class="bank-btn-label" id="bankBtnLabel">超格 400</span>
+          <svg class="bank-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="bank-menu" id="bankMenu" role="listbox" hidden></div>
+      </div>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="切换主题" title="切换主题">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="views" id="views">
+
+    <!-- ============ 学习 ============ -->
+    <section class="view is-active" id="view-study">
+      <div class="searchbar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        <input type="search" id="searchInput" placeholder="搜词、搜释义，如「一脉相承」「父子关系」" autocomplete="off">
+        <button class="search-clear" id="searchClear" type="button" aria-label="清空" hidden>×</button>
+      </div>
+      <div id="studyBody"></div>
+    </section>
+
+    <!-- ============ 练习 ============ -->
+    <section class="view" id="view-practice">
+      <div id="practiceBody"></div>
+    </section>
+
+    <!-- ============ 错词本 ============ -->
+    <section class="view" id="view-wrong">
+      <div id="wrongBody"></div>
+    </section>
+
+    <!-- ============ 我的 ============ -->
+    <section class="view" id="view-me">
+      <div id="meBody"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab is-active" data-tab="study" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5"/></svg>
+      <span>学习</span>
+    </button>
+    <button class="tab" data-tab="practice" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
+      <span>练习</span>
+    </button>
+    <button class="tab" data-tab="wrong" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+      <span>错词本</span>
+      <em class="tab-dot" id="wrongDot" hidden></em>
+    </button>
+    <button class="tab" data-tab="me" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4S18.3 16.4 19.5 20"/></svg>
+      <span>我的</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- 练习浮层 -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-panel" id="sheetPanel"></div>
+</div>
+
+<canvas class="confetti" id="confetti" hidden></canvas>
+
+<script src="data/words_400.js"></script>
+<script src="data/words_1000.js"></script>
+<script src="js/store.js"></script>
+<script src="js/confetti.js"></script>
+<script src="js/quiz.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
