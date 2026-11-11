@@ -693,13 +693,6 @@ h1, h2, h3, h4, p { margin: 0; }
   box-shadow: var(--shadow-1);
 }
 
-.q-prompt .blank {
-  display: inline-block;
-  min-width: 62px;
-  border-bottom: 2px solid var(--accent);
-  color: transparent;
-}
-
 .q-blank {
   display: inline-block;
   width: 56px;
@@ -1304,4 +1297,350 @@ h1, h2, h3, h4, p { margin: 0; }
 .row-card.is-removing {
   opacity: 0;
   transform: translateX(14px);
+}
+
+/* ==========================================================================
+   学习增强：已学勾选 / 组进度环 / 对比视图 / 自测模糊
+   ========================================================================== */
+
+/* ---------- 小胶囊开关（自测、视图切换） ---------- */
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chip-btn svg { width: 14px; height: 14px; }
+.chip-btn:active { transform: scale(0.96); }
+
+.chip-btn.is-on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip-group {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.chip-group .chip-btn {
+  height: 26px;
+  border: 0;
+  background: transparent;
+}
+
+.chip-group .chip-btn.is-on {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+/* ---------- 组列表：环形进度 ---------- */
+.group-ring {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 12px;
+  background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), var(--line) 0);
+  transition: background 0.4s ease;
+}
+
+.group-ring.is-full {
+  background: conic-gradient(var(--green) calc(var(--p, 0) * 1%), var(--green-soft) 0);
+}
+
+.group-ring .group-no {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  background: var(--card);
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.group-ring.is-full .group-no { color: var(--green); }
+
+/* ---------- 组详情工具条 ---------- */
+.group-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.group-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.group-progress .progress {
+  flex: 1;
+  margin: 0;
+}
+
+.gp-text {
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gp-all {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.gp-all:active { transform: scale(0.96); }
+
+/* ---------- 词卡上的已学勾选 ---------- */
+.mark-btn {
+  flex: none;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: transparent;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.mark-btn svg { width: 15px; height: 15px; }
+.mark-btn:active { transform: scale(0.9); }
+
+.mark-btn.is-on {
+  border-color: transparent;
+  background: var(--green);
+  color: #fff;
+  animation: mark-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes mark-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+.word-card.is-seen {
+  border-color: rgba(52, 199, 89, 0.35);
+}
+
+/* ---------- 自测模式：内容模糊，点一下看 ---------- */
+.word-card.is-blind .word-gloss,
+.word-card.is-blind .wblock {
+  filter: blur(5px);
+  opacity: 0.55;
+  transition: filter 0.24s ease, opacity 0.24s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.word-card.is-blind .word-head::after {
+  content: '点一下看释义';
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--line);
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.word-card.is-revealed .word-gloss,
+.word-card.is-revealed .wblock {
+  filter: none;
+  opacity: 1;
+}
+
+/* ---------- 组内对比视图 ---------- */
+.cmp-list { margin-bottom: 6px; }
+
+.cmp-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  animation: item-in 0.28s ease both;
+  animation-delay: var(--d, 0s);
+}
+
+.cmp-row:last-child { border-bottom: 0; }
+
+.cmp-word {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.cmp-word .tone {
+  align-self: flex-start;
+  font-weight: 400;
+}
+
+.cmp-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+.cmp-text b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.cmp-text p + p { margin-top: 5px; }
+
+/* ---------- 组底部的练习引导 ---------- */
+.cta-card {
+  margin: 18px 0 6px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.cta-title { font-size: 15px; font-weight: 600; }
+.cta-sub { margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--text-3); }
+
+.cta-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.cta-btn.is-main {
+  grid-column: 1 / -1;
+  min-height: 46px;
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14.5px;
+  box-shadow: 0 6px 16px rgba(0, 113, 227, 0.22);
+}
+
+.cta-btn:active { transform: scale(0.98); }
+.cta-btn[disabled] { opacity: 0.4; pointer-events: none; }
+.cta-btn small { font-size: 11px; color: var(--text-3); font-weight: 400; }
+
+/* ---------- 空状态里的行动按钮 ---------- */
+.empty-state .btn { margin-top: 16px; }
+
+/* [hidden] 的 UA 样式会被 .searchbar 的 display:flex 覆盖，这里补回来 */
+.searchbar[hidden] { display: none; }
+
+/* 真题段落折叠 */
+.real-body.is-collapsed > p:not(:first-child) { display: none; }
+
+.link-btn {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
+.link-btn:active { opacity: 0.6; }
+
+/* ---------- 继续学习条 ---------- */
+.resume-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 11px 14px;
+  border: 1px solid rgba(0, 113, 227, 0.28);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  text-align: left;
+  color: var(--accent);
+  animation: item-in 0.3s ease both;
+}
+
+.resume-bar:active { transform: scale(0.99); }
+
+.rb-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.rb-main {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-meta {
+  margin-left: auto;
+  flex: none;
+  font-size: 11.5px;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.resume-bar.is-done {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--text-2);
+  justify-content: center;
+  font-size: 13px;
 }

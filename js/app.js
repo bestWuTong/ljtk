@@ -9,7 +9,9 @@
     bank: Store.bank,
     view: 'list',     // list | group
     gid: null,
-    query: ''
+    query: '',
+    blind: false,     // 自测模式：释义先模糊，点一下才看
+    gmode: 'card'     // 组内视图：card 卡片 / table 对比
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -34,8 +36,6 @@
     return out;
   }
 
-  function wordCount(g) { return groupWordIds(g).length; }
-
   function toneClass(t) {
     if (!t) return '';
     if (/贬/.test(t) && !/中/.test(t)) return 'tone-bian';
@@ -48,17 +48,27 @@
      ================================================================== */
   function renderStudy() {
     var box = $('studyBody');
+    var sb = $('searchBar');
+    var inGroup = state.view === 'group' && !state.query;
+    if (sb) sb.hidden = inGroup;   // 组内不需要搜索框，腾出空间
+
     if (state.query) { renderSearch(box); return; }
     if (state.view === 'group') { renderGroup(box); return; }
 
     var b = bank();
-    var total = Object.keys(b.words).length;
-    var seen = Store.seenCount(Object.keys(b.words));
+    var ids = Object.keys(b.words);
+    var seen = Store.seenCount(ids);
     var html = '';
     var idx = 0;
 
-    html += '<div class="sec-head"><span class="sec-title">' + esc(b.name) + '</span>' +
-      '<span class="sec-note">' + b.groups.length + ' 组 · ' + total + ' 词 · 已学 ' + seen + '</span></div>';
+    html += '<div class="sec-head">' +
+      '<div><div class="sec-title">' + esc(b.name) + '</div>' +
+      '<div class="sec-note">' + b.groups.length + ' 组 · ' + ids.length +
+        ' 词 · 已学 ' + seen + '</div></div>' +
+      blindChip() +
+    '</div>';
+
+    html += resumeBar(b);
 
     if (b.id === 'c400') {
       var last = '';
@@ -74,6 +84,18 @@
     }
 
     box.innerHTML = html;
+    bindBlind();
+
+    var resume = box.querySelector('[data-resume]');
+    if (resume) {
+      resume.addEventListener('click', function () {
+        state.view = 'group';
+        state.gid = Number(resume.dataset.resume);
+        renderStudy();
+        $('views').scrollTop = 0;
+      });
+    }
+
     box.querySelectorAll('.group-item').forEach(function (el) {
       el.addEventListener('click', function () {
         state.view = 'group';
@@ -84,17 +106,71 @@
     });
   }
 
+  /* 自测开关：开着的时候所有释义先模糊 */
+  function blindChip() {
+    return '<button class="chip-btn' + (state.blind ? ' is-on' : '') +
+      '" data-blind title="开启后释义先遮住，点卡片才显示">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+        'stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/>' +
+        '<circle cx="12" cy="12" r="2.6"/></svg>' +
+      (state.blind ? '自测中' : '自测') + '</button>';
+  }
+
+  function bindBlind(scope) {
+    (scope || document).querySelectorAll('[data-blind]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        state.blind = !state.blind;
+        renderStudy();
+      });
+    });
+  }
+
+  /* 继续学习：优先接着学「开了头但没学完」的组，其次是第一个没碰过的 */
+  function resumeBar(b) {
+    var inProgress = null, fresh = null, allDone = true;
+    b.groups.forEach(function (g) {
+      var ids = groupWordIds(g);
+      var seen = Store.seenCount(ids);
+      if (seen < ids.length) allDone = false;
+      if (seen > 0 && seen < ids.length && !inProgress) {
+        inProgress = { g: g, seen: seen, total: ids.length };
+      }
+      if (seen === 0 && !fresh) {
+        fresh = { g: g, seen: 0, total: ids.length };
+      }
+    });
+
+    if (allDone) {
+      return '<div class="resume-bar is-done">这本题库已经整体过了一轮，去练习巩固 →</div>';
+    }
+
+    var next = inProgress || fresh;
+    if (!next) return '';
+
+    return '<button class="resume-bar" data-resume="' + next.g.id + '">' +
+      '<span class="rb-label">' + (inProgress ? '继续' : '从头开始') + '</span>' +
+      '<span class="rb-main">' + esc(next.g.title) + '</span>' +
+      '<span class="rb-meta">已学 ' + next.seen + '/' + next.total + '</span>' +
+      '<span class="group-chev">›</span>' +
+    '</button>';
+  }
+
   function groupItemHtml(g, i) {
     var ids = groupWordIds(g);
     var seen = Store.seenCount(ids);
+    var pct = ids.length ? Math.round(seen * 100 / ids.length) : 0;
+    var full = pct >= 100;
     var subN = g.subs.filter(function (s) { return s.name; }).length;
     var delay = (i < 10 ? i * 0.025 : 0.25).toFixed(3);
     return '<button class="group-item" data-gid="' + g.id + '" style="--d:' + delay + 's">' +
-      '<span class="group-no">' + (g.no || g.id) + '</span>' +
+      '<span class="group-ring' + (full ? ' is-full' : '') + '" style="--p:' + pct + '">' +
+        '<span class="group-no">' + (g.no || g.id) + '</span>' +
+      '</span>' +
       '<span class="group-main">' +
         '<span class="group-name">' + esc(g.title) + '</span>' +
         '<span class="group-meta">' + (subN ? subN + ' 类 · ' : '') +
-          ids.length + ' 词 · 已学 ' + seen + '</span>' +
+          ids.length + ' 词' + (seen > 0 ? ' · 已学 ' + seen : '') + '</span>' +
       '</span>' +
       '<span class="group-chev">›</span>' +
     '</button>';
@@ -104,14 +180,73 @@
     var g = groupById(state.gid);
     if (!g) { state.view = 'list'; renderStudy(); return; }
     var b = bank();
+    var ids = groupWordIds(g);
+    var seen = Store.seenCount(ids);
+    var pct = ids.length ? Math.round(seen * 100 / ids.length) : 0;
+
     var html = '<div class="backbar">' +
       '<button class="back-btn" id="backBtn">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>返回' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>返回' +
       '</button>' +
-      '<span class="sec-note">' + esc(g.title) + ' · ' + wordCount(g) + ' 词</span>' +
+      '<div class="group-tools">' +
+        blindChip() +
+        '<div class="chip-group" id="gmodeSwitch">' +
+          '<button class="chip-btn' + (state.gmode === 'card' ? ' is-on' : '') +
+            '" data-gmode="card">卡片</button>' +
+          '<button class="chip-btn' + (state.gmode === 'table' ? ' is-on' : '') +
+            '" data-gmode="table">对比</button>' +
+        '</div>' +
+      '</div>' +
     '</div>';
 
-    var realShown = {};
+    html += '<div class="group-progress">' +
+      '<span class="gp-text" id="gpText">已学 ' + seen + '/' + ids.length + '</span>' +
+      '<div class="progress"><i id="gpBar" style="width:' + pct + '%"></i></div>' +
+      '<button class="gp-all" id="gpAll">' +
+        (seen >= ids.length ? '全部取消' : '全标已学') + '</button>' +
+    '</div>';
+
+    html += state.gmode === 'table'
+      ? comparisonHtml(g, b)
+      : cardsHtml(g, b);
+
+    html += ctaHtml(g, ids);
+
+    box.innerHTML = html;
+
+    $('backBtn').addEventListener('click', function () {
+      state.view = 'list'; state.gid = null;
+      renderStudy();
+      $('views').scrollTop = 0;
+    });
+
+    $('gmodeSwitch').querySelectorAll('.chip-btn').forEach(function (el) {
+      el.addEventListener('click', function () {
+        state.gmode = el.dataset.gmode;
+        renderStudy();
+      });
+    });
+
+    bindBlind();
+
+    $('gpAll').addEventListener('click', function () {
+      var now = Store.seenCount(ids);
+      if (now >= ids.length) Store.unmarkMany(ids);
+      else Store.markMany(ids);
+      renderStudy();
+    });
+
+    box.querySelectorAll('[data-gquiz]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        openQuiz(el.dataset.gquiz, { gid: g.id, ids: ids });
+      });
+    });
+  }
+
+  /* 卡片视图 */
+  function cardsHtml(g, b) {
+    var html = '';
     var wi = 0;
     g.subs.forEach(function (s) {
       if (s.name) html += '<div class="sub-head">' + esc(s.name) + '</div>';
@@ -120,36 +255,119 @@
         if (!w) return;
         html += wordCardHtml(w, wi++);
       });
-      var firstId = s.words[0];
-      var firstW = firstId ? b.words[firstId] : null;
-      if (firstW && firstW.real && firstW.real.length && !realShown[s.name]) {
-        realShown[s.name] = 1;
-        html += '<div class="word-card"><div class="wlabel">真题语境</div>' +
-          firstW.real.slice(0, 2).map(function (t) {
-            return '<p class="wtext" style="margin-top:8px">' + esc(t) + '</p>';
-          }).join('') + '</div>';
+      var firstW = s.words.length ? b.words[s.words[0]] : null;
+      if (firstW && firstW.real && firstW.real.length) {
+        var list = firstW.real.slice(0, 2);
+        html += '<div class="word-card">' +
+          '<div class="wlabel">真题语境</div>' +
+          '<div class="real-body' + (list.length > 1 ? ' is-collapsed' : '') + '">' +
+            list.map(function (t) {
+              return '<p class="wtext" style="margin-top:8px">' + esc(t) + '</p>';
+            }).join('') +
+          '</div>' +
+          (list.length > 1
+            ? '<button class="link-btn" data-expand>展开第 2 段真题</button>'
+            : '') +
+        '</div>';
       }
     });
+    return html;
+  }
 
-    box.innerHTML = html;
-    $('backBtn').addEventListener('click', function () {
-      state.view = 'list'; state.gid = null;
-      renderStudy();
-      $('views').scrollTop = 0;
+  /* 对比视图：同一子类的词并排，只留最能区分的信息 */
+  function comparisonHtml(g, b) {
+    var html = '';
+    var wi = 0;
+    g.subs.forEach(function (s) {
+      if (s.name) html += '<div class="sub-head">' + esc(s.name) + '</div>';
+      html += '<div class="cmp-list">';
+      s.words.forEach(function (id) {
+        var w = b.words[id];
+        if (!w) return;
+        var delay = (Math.min(wi, 10) * 0.02).toFixed(3);
+        var focus = (w.focus && w.focus.length) ? w.focus.join(' ') : '';
+        var memo = (w.memo && w.memo !== w.gloss) ? w.memo : '';
+        html += '<div class="cmp-row" style="--d:' + delay + 's">' +
+          '<div class="cmp-word">' + esc(w.w) +
+            (w.tone ? '<span class="tone ' + toneClass(w.tone) + '">' + esc(w.tone) + '</span>' : '') +
+          '</div>' +
+          '<div class="cmp-text">' +
+            (w.gloss ? '<p>' + esc(w.gloss) + '</p>' : '') +
+            (focus ? '<p><b>侧重</b> ' + esc(focus) + '</p>' : '') +
+            (memo ? '<p>' + esc(memo) + '</p>' : '') +
+          '</div>' +
+        '</div>';
+        wi++;
+      });
+      html += '</div>';
     });
+    return html;
+  }
 
-    groupWordIds(g).forEach(function (id) { Store.markSeen(id); });
-    renderTabsBadge();
+  /* 组底部：学完直接练这一组 */
+  function ctaHtml(g, ids) {
+    var b = bank();
+    var hasEg = ids.some(function (id) {
+      var w = b.words[id];
+      return w && w.eg && w.eg.length;
+    });
+    var hasScene = ids.some(function (id) {
+      var w = b.words[id];
+      return w && Quiz.sceneClue(w);
+    });
+    var canMatch = ids.length >= 3;
+
+    return '<div class="cta-card">' +
+      '<div class="cta-title">学完就练</div>' +
+      '<div class="cta-sub">从这一组的 ' + ids.length +
+        ' 个词里抽题，干扰项还是同组的近义词。答错自动进错词本。</div>' +
+      '<div class="cta-modes">' +
+        '<button class="cta-btn is-main" data-gquiz="choice">练这一组</button>' +
+        '<button class="cta-btn" data-gquiz="match"' +
+          (canMatch ? '' : ' disabled title="这组词太少，凑不齐配对"') + '>连连看</button>' +
+        '<button class="cta-btn" data-gquiz="scene"' +
+          (hasScene ? '' : ' disabled title="这组的释义里没有「常用于…」这类线索"') +
+          '>场景反查</button>' +
+        '<button class="cta-btn" data-gquiz="context"' +
+          (hasEg ? '' : ' disabled title="这组没有例句，用不了填空"') +
+          '>语境填空</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function updateGroupProgress() {
+    var g = groupById(state.gid);
+    if (!g) return;
+    var ids = groupWordIds(g);
+    var seen = Store.seenCount(ids);
+    var pct = ids.length ? Math.round(seen * 100 / ids.length) : 0;
+    var t = $('gpText');
+    if (t) t.textContent = '已学 ' + seen + '/' + ids.length;
+    var bar = $('gpBar');
+    if (bar) bar.style.width = pct + '%';
+    var all = $('gpAll');
+    if (all) all.textContent = seen >= ids.length ? '全部取消' : '全标已学';
   }
 
   function wordCardHtml(w, i) {
     var slim = !(w.focus && w.focus.length) && !(w.eg && w.eg.length);
     var n = i || 0;
     var delay = (n < 8 ? n * 0.03 : 0.24).toFixed(3);
+    var seen = Store.isSeen(w.id);
+    // 搜索结果是"查资料"，不该被自测模糊挡住
+    var blind = state.blind && !state.query;
+
     var html = '<article class="word-card' + (slim ? ' is-slim' : '') +
-      '" style="--d:' + delay + 's">';
+      (seen ? ' is-seen' : '') + (blind ? ' is-blind' : '') +
+      '" data-wid="' + w.id + '" style="--d:' + delay + 's">';
+
     html += '<div class="word-head"><h3 class="word-h">' + esc(w.w) + '</h3>';
     if (w.tone) html += '<span class="tone ' + toneClass(w.tone) + '">' + esc(w.tone) + '</span>';
+    html += '<button class="mark-btn' + (seen ? ' is-on' : '') + '" data-mark="' + w.id +
+      '" aria-pressed="' + (seen ? 'true' : 'false') + '" title="标记已学">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" ' +
+      'stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' +
+    '</button>';
     html += '</div>';
 
     if (w.gloss) html += '<p class="word-gloss">' + esc(w.gloss) + '</p>';
@@ -165,6 +383,36 @@
     }
     html += '</article>';
     return html;
+  }
+
+  /* 学习区点击委托：勾选已学 / 自测时点开释义 / 展开真题 */
+  function onStudyClick(e) {
+    var mark = e.target.closest('.mark-btn');
+    if (mark) {
+      e.preventDefault();
+      var id = mark.dataset.mark;
+      var on = Store.toggleSeen(id);
+      mark.classList.toggle('is-on', on);
+      mark.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var card = mark.closest('.word-card');
+      if (card) card.classList.toggle('is-seen', on);
+      updateGroupProgress();
+      return;
+    }
+
+    var exp = e.target.closest('[data-expand]');
+    if (exp) {
+      var wrap = exp.closest('.word-card');
+      var body = wrap && wrap.querySelector('.real-body');
+      if (body) body.classList.remove('is-collapsed');
+      exp.remove();
+      return;
+    }
+
+    var blind = e.target.closest('.word-card.is-blind');
+    if (blind && !blind.classList.contains('is-revealed')) {
+      blind.classList.add('is-revealed');
+    }
   }
 
   /* ---------------- 搜索 ---------------- */
@@ -211,7 +459,8 @@
   function renderPractice() {
     var box = $('practiceBody');
     var b = bank();
-    var d = Store.daily(Object.keys(b.words));
+    var allIds = Object.keys(b.words);
+    var d = Store.daily(b.id, allIds);
     var pct = Math.round(d.done.length * 100 / (d.ids.length || 1));
     var s = Store.stats();
 
@@ -280,7 +529,9 @@
       box.innerHTML = '<div class="empty-state">' +
         '<div class="empty-title">错词本还是空的</div>' +
         '<div class="empty-desc">练习里答错的词会自动收进来，答对两次后自动移出。</div>' +
+        '<button class="btn btn-soft" id="goPractice">去做一组练习</button>' +
       '</div>';
+      $('goPractice').addEventListener('click', function () { switchTab('practice'); });
       return;
     }
 
@@ -309,7 +560,7 @@
     $('wrongPractice').addEventListener('click', function () {
       var ids = Store.wrongList().map(function (x) { return x.id; });
       if (!ids.length) return;
-      openQuiz('wrong', ids);
+      openQuiz('wrong', { ids: ids });
     });
     $('wrongClear').addEventListener('click', function () {
       if (confirm('确定清空错词本？')) { Store.clearWrong(); renderWrong(); renderTabsBadge(); }
@@ -389,50 +640,65 @@
      ================================================================== */
   var session = null;
 
-  function openQuiz(mode, ids) {
-    var box = $('sheetPanel');
+  function openQuiz(mode, opts) {
+    opts = opts || {};
     var sheet = $('sheet');
     sheet.classList.remove('is-out');
     sheet.hidden = false;
 
+    var b = bank();
+    var allIds = Object.keys(b.words);
+
     if (mode === 'match') {
-      var m = Quiz.makeMatch({ bank: state.bank }, 5);
-      if (!m) { toast('这个题库暂时凑不齐可配对的词'); closeSheet(); return; }
-      session = { mode: 'match', data: m, picked: null, done: 0, wrong: 0, t0: Date.now() };
+      var m = Quiz.makeMatch({ bank: state.bank, gid: opts.gid }, 5);
+      if (!m) { toast('这组词太少，凑不齐配对'); closeSheet(); return; }
+      session = {
+        mode: 'match', data: m, picked: null, done: 0, wrong: 0,
+        t0: Date.now(), scope: opts.gid ? 'group' : 'bank'
+      };
       renderMatch();
       return;
     }
 
-    var pool;
+    var pool, scope;
     if (mode === 'daily') {
-      var d = Store.daily(Object.keys(bank().words));
-      pool = d.ids.slice();
+      pool = Store.daily(state.bank, allIds).ids.slice();
+      scope = 'daily';
     } else if (mode === 'wrong') {
-      pool = ids.slice();
+      pool = (opts.ids || []).slice();
+      scope = 'wrong';
+    } else if (opts.ids && opts.ids.length) {
+      pool = opts.ids.slice();
+      scope = 'group';
     } else {
-      pool = Object.keys(bank().words);
+      pool = allIds;
+      scope = 'bank';
     }
 
-    var qs = Quiz.buildQuestions(
-      mode === 'daily' ? 'choice' : mode === 'wrong' ? 'choice' : mode,
-      pool, mode === 'daily' ? 20 : 10
-    );
+    var qmode = (mode === 'daily' || mode === 'wrong') ? 'choice' : mode;
+    var want = mode === 'daily' ? 20 : 10;
+    if (scope === 'group') want = Math.min(want, pool.length);
 
-    if (!qs.length) { toast('这个题库里没凑出合适的题目'); closeSheet(); return; }
+    var qs = Quiz.buildQuestions(qmode, pool, want);
+
+    if (!qs.length) {
+      toast(scope === 'group' ? '这组词凑不出这一类的题' : '这个题库里没凑出合适的题目');
+      closeSheet();
+      return;
+    }
 
     session = {
-      mode: mode === 'daily' || mode === 'wrong' ? 'choice' : mode,
-      items: qs, index: 0, right: 0, wrong: 0,
+      mode: qmode, items: qs, index: 0, right: 0, wrong: 0,
       t0: Date.now(), answered: false,
-      isDaily: mode === 'daily'
+      isDaily: mode === 'daily', scope: scope
     };
     renderQuestion();
   }
 
   function closeSheet() {
     var sheet = $('sheet');
-    if (sheet.hidden) return;
-    if (Confetti) Confetti.stop();
+    if (sheet.hidden || sheet.classList.contains('is-out')) return;
+    if (window.Confetti) Confetti.stop();
     sheet.classList.add('is-out');
     setTimeout(function () {
       sheet.hidden = true;
@@ -533,7 +799,8 @@
     var html = quizHeader(s.done + ' / ' + total, pct);
     html += '<div class="quiz-body">';
     html += '<p class="q-kicker">连一连：左边选词，右边选释义' +
-      (m.sub ? ' · 本组「' + esc(m.sub) + '」' : '') + '</p>';
+      (m.group ? ' · ' + esc(m.group) : '') +
+      (m.sub ? ' / ' + esc(m.sub) : '') + '</p>';
     html += '<div class="match-board">';
     html += '<div class="match-col" id="colL">';
     m.left.forEach(function (p, i) {
@@ -619,8 +886,9 @@
   function renderResult() {
     var s = session;
     var total = s.mode === 'match' ? s.data.pairs.length : s.items.length;
-    var right = s.mode === 'match' ? (total - s.wrong) : s.right;
-    var rate = Math.round(right * 100 / (total || 1));
+    // 连连看里点错不扣分，按「失误次数」算，避免出现负分
+    var right = s.mode === 'match' ? Math.max(0, total - s.wrong) : s.right;
+    var rate = Math.max(0, Math.min(100, Math.round(right * 100 / (total || 1))));
     var secs = Math.max(1, Math.round((Date.now() - s.t0) / 1000));
     var time = secs >= 60 ? Math.floor(secs / 60) + ' 分 ' + (secs % 60) + ' 秒' : secs + ' 秒';
 
@@ -631,10 +899,10 @@
     html += '<div class="quiz-body"><div class="result-wrap">';
     html += '<div class="result-ring" id="resultRing">0%</div>';
     html += '<div class="result-title">' + title + '</div>';
-    html += '<div class="result-sub">用时 ' + time + '</div>';
+    html += '<div class="result-sub">' + total + ' 题 · 用时 ' + time + '</div>';
     html += '<div class="result-stats">' +
-      statBox(right, '答对') +
-      statBox(total - right, '答错') +
+      statBox(right, s.mode === 'match' ? '配对成功' : '答对') +
+      statBox(s.wrong, s.mode === 'match' ? '失误' : '答错') +
       statBox(Store.wrongCount(), '错词本') +
     '</div>';
     html += '<button class="btn btn-primary btn-block" id="againBtn">再来一轮</button>';
@@ -666,6 +934,8 @@
     $('doneBtn').addEventListener('click', closeSheet);
     $('againBtn').addEventListener('click', function () {
       var mode = s.isDaily ? 'daily' : s.mode;
+      // 每日任务重新抽一批，否则会一直练同样的 20 题
+      if (s.isDaily) Store.dailyReset(state.bank, Object.keys(bank().words));
       closeSheet();
       setTimeout(function () { openQuiz(mode); }, 200);
     });
@@ -778,6 +1048,8 @@
 
   function renderAll() {
     $('bankBtnLabel').textContent = bankMap[state.bank].short;
+    // 菜单的选中勾必须跟着 state.bank 走，否则切库后勾还停在旧题库上
+    renderBankMenu();
     if (state.tab === 'study') renderStudy();
     if (state.tab === 'practice') renderPractice();
     if (state.tab === 'wrong') renderWrong();
@@ -803,8 +1075,6 @@
     var savedTheme = document.documentElement.getAttribute('data-theme') || 'light';
     updateThemeVal();
     if (savedTheme) applyTheme(savedTheme);
-
-    renderBankMenu();
 
     $('bankBtn').addEventListener('click', function () {
       var menu = $('bankMenu');
@@ -845,6 +1115,10 @@
       el.addEventListener('click', function () { switchTab(el.dataset.tab); });
     });
 
+    $('studyBody').addEventListener('click', onStudyClick);
+
+    document.addEventListener('keydown', onKey);
+
     renderAll();
 
     // 启动遮罩：首帧先挡住，等首页渲染完再淡出（最短 240ms，避免一闪而过）
@@ -855,6 +1129,35 @@
         boot.classList.add('is-done');
         setTimeout(function () { boot.hidden = true; }, 320);
       }, wait);
+    }
+  }
+
+  /* 键盘：1-4 选选项，Enter/空格 下一题，Esc 退出（桌面端用） */
+  function onKey(e) {
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if ($('sheet').hidden) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSheet();
+      return;
+    }
+    if (/^[1-4]$/.test(e.key)) {
+      var opts = document.querySelectorAll('.opt:not([disabled])');
+      var idx = Number(e.key) - 1;
+      if (opts[idx]) {
+        opts[idx].click();
+        e.preventDefault();
+      }
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      var next = $('nextBtn');
+      if (next) {
+        next.click();
+        e.preventDefault();
+      }
     }
   }
 

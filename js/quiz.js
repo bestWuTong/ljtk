@@ -32,20 +32,6 @@ var Quiz = (function () {
     return idx;
   }
 
-  function subIndex(bank) {
-    if (bank._sidx) return bank._sidx;
-    var idx = {};
-    bank.groups.forEach(function (g) {
-      g.subs.forEach(function (s) {
-        var key = g.id + '|' + s.name;
-        idx[key] = s.words;
-      });
-    });
-    bank._sidx = idx;
-    return idx;
-  }
-
-  function word(w) { return w; }
 
   function glossOf(w) {
     if (w.gloss) return w.gloss;
@@ -222,29 +208,45 @@ var Quiz = (function () {
     return b ? b.words[id] : null;
   }
 
-  /* 连连看：一个子类里取 4~6 对，左右各自打乱 */
+  /* 连连看：一个子类里取 4~6 对，左右各自打乱。
+     "练本组"时若组内没有够词的子类，就退回用整组词凑。 */
   function makeMatch(pool, n) {
     n = n || 5;
     var b = banks[pool.bank];
-    var cands = [];
+    var rich = [], thin = [];
     b.groups.forEach(function (g) {
       if (pool.gid && g.id !== pool.gid) return;
       g.subs.forEach(function (s) {
-        if (s.words.length >= 4) {
-          cands.push({ gid: g.id, sub: s.name, words: s.words });
-        }
+        var item = { gid: g.id, sub: s.name, group: g.title, words: s.words };
+        if (s.words.length >= 4) rich.push(item);
+        else if (s.words.length >= 3) thin.push(item);
       });
     });
-    if (!cands.length) return null;
+    var cands = rich.length ? rich : thin;
 
-    var picked = pick(cands);
-    var ids = shuffle(picked.words.slice()).slice(0, Math.min(n, picked.words.length));
-    var pairs = ids.map(function (id) {
+    var picked = null;
+    if (cands.length) {
+      picked = pick(cands);
+    } else if (pool.gid) {
+      var g = groupIndex(b)[pool.gid];
+      if (g) {
+        var ids = [];
+        g.subs.forEach(function (s) { ids = ids.concat(s.words); });
+        if (ids.length >= 3) {
+          picked = { gid: g.id, sub: '', group: g.title, words: ids };
+        }
+      }
+    }
+    if (!picked) return null;
+
+    var ids2 = shuffle(picked.words.slice()).slice(0, Math.min(n, picked.words.length));
+    var pairs = ids2.map(function (id) {
       var w = b.words[id];
       return { id: id, w: w.w, gloss: glossOf(w) };
     });
     return {
       sub: picked.sub,
+      group: picked.group,
       pairs: pairs,
       left: shuffle(pairs.slice()),
       right: shuffle(pairs.slice())

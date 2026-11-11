@@ -5,9 +5,9 @@ var Store = (function () {
 
   var DEFAULT = {
     bank: 'c400',
-    seen: {},      // wordId -> 首次学习时间戳
+    seen: {},      // wordId -> 首次标记已学的时间戳
     wrong: {},     // wordId -> { n: 错次, last: 时间戳, right: 答对次数 }
-    daily: null,   // { date, ids, done }
+    daily: {},     // bankId -> { date, ids, done }   按题库分开，避免切库串题
     stats: { answered: 0, right: 0, days: {}, lastDay: '', streak: 0 }
   };
 
@@ -69,9 +69,32 @@ var Store = (function () {
     get bank() { return state.bank; },
     setBank: function (id) { state.bank = id; save(); },
 
-    /* 学习记录 */
+    /* 学习记录 —— 显式标记，不自动记 */
     markSeen: function (id) {
       if (!state.seen[id]) { state.seen[id] = Date.now(); save(); }
+    },
+    unmarkSeen: function (id) {
+      if (state.seen[id]) { delete state.seen[id]; save(); }
+    },
+    toggleSeen: function (id) {
+      if (state.seen[id]) { delete state.seen[id]; save(); return false; }
+      state.seen[id] = Date.now(); save(); return true;
+    },
+    markMany: function (ids) {
+      var n = 0;
+      ids.forEach(function (id) {
+        if (!state.seen[id]) { state.seen[id] = Date.now(); n++; }
+      });
+      if (n) save();
+      return n;
+    },
+    unmarkMany: function (ids) {
+      var n = 0;
+      ids.forEach(function (id) {
+        if (state.seen[id]) { delete state.seen[id]; n++; }
+      });
+      if (n) save();
+      return n;
     },
     isSeen: function (id) { return !!state.seen[id]; },
     seenCount: function (ids) {
@@ -127,10 +150,13 @@ var Store = (function () {
       };
     },
 
-    /* 每日 20 词：未学优先，其次错词，最后随机复习 */
-    daily: function (allIds) {
+    /* 每日 20 词：按题库分开，未学优先，其次复习 */
+    daily: function (bankId, allIds) {
       var t = today();
-      if (state.daily && state.daily.date === t) return state.daily;
+      if (!state.daily || typeof state.daily.date === 'string') state.daily = {};
+      var d = state.daily[bankId];
+      if (d && d.date === t && d.ids && d.ids.length) return d;
+
       var unseen = [], review = [];
       for (var i = 0; i < allIds.length; i++) {
         if (!state.seen[allIds[i]]) unseen.push(allIds[i]);
@@ -139,14 +165,21 @@ var Store = (function () {
       shuffle(unseen); shuffle(review);
       var picked = unseen.slice(0, 20);
       if (picked.length < 20) picked = picked.concat(review.slice(0, 20 - picked.length));
-      state.daily = { date: t, ids: picked, done: [] };
+      state.daily[bankId] = { date: t, ids: picked, done: [] };
       save();
-      return state.daily;
+      return state.daily[bankId];
     },
-    dailyMark: function (id) {
-      var d = state.daily;
-      if (!d) return;
+    dailyMark: function (bankId, id) {
+      var d = state.daily && state.daily[bankId];
+      if (!d || !d.done) return;
       if (d.done.indexOf(id) < 0) { d.done.push(id); save(); }
+    },
+    /* 今日任务重新抽一批（练完想再来一轮时用） */
+    dailyReset: function (bankId, allIds) {
+      if (!state.daily) state.daily = {};
+      delete state.daily[bankId];
+      save();
+      return this.daily(bankId, allIds);
     },
 
     reset: function () {
